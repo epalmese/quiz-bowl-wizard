@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Quiz Bowl Pack Reader</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A Quiz Bowl format question pack reader.">
+    <link href="quiz.css" rel="stylesheet" type="text/css">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+</head>
+
+<body>
+    <div id="wrapper">
+        <h1>QuizReader</h1> <span id="version">0.1</span>
+        <button id="buttonR" class="control">Home</button>
+        <button id="buttonH" class="control">Help (h)</button><br><br>
+        <span for="modeselect">Mode:</span>
+        <select id="modeselect">
+          <option value="mod">Moderator</option>
+          <option value="solo">Solo</option>
+        </select>
+        <input type="file" id="packselect" accept=".quiz"><br><br>
+        <h2 id="packtitle" style="text-align:center;"></h2>
+        <h3 id="packauthor" style="text-align:center;"></h3>
+        <h4 id="packnote"></h4>
+        <div id="questions"></div>
+        <div id="bonuses"></div>
+    </div>
+    <script>
+    (function() {
+        document.addEventListener("keyup", function(e) { //when a key is released
+            e = e || window.event;
+            var target = e.target || e.srcElement;
+            if (!(/INPUT|TEXTAREA|SELECT|BUTTON/).test(target.nodeName)) { //if no input element is selected
+                if (e.keyCode == 72) { //h
+                    help(); //open help
+                }
+                if (opened == true) {
+                    if (e.keyCode == 84 && qstep < questions.children.length - 1) { //t
+                        qstep++;
+                        questions.children[qstep].scrollIntoView({block: "start", behavior: "smooth"});
+                    }
+                    if (e.keyCode == 82 && qstep > 0) { //r
+                        qstep--;
+                        questions.children[qstep].scrollIntoView({block: "start", behavior: "smooth"});
+                    }
+                    if (e.keyCode == 66 && bstep < bonuses.children.length - 1) { //b
+                        bstep++;
+                        bonuses.children[bstep].scrollIntoView({block: "start", behavior: "smooth"});
+                    }
+                    if (e.keyCode == 86 && bstep > 0) { //v
+                        bstep--;
+                        bonuses.children[bstep].scrollIntoView({block: "start", behavior: "smooth"});
+                    }
+                }
+            }
+        }, false);
+        //button functions
+        document.getElementById("buttonR").addEventListener("click", function() {location.href="index.html";}, false);
+        document.getElementById("buttonH").addEventListener("click", function() {help();}, false);
+        document.getElementById("packselect").addEventListener("change", function(e) {load(e);}, false);
+
+        function load(event) { //select and load file
+            var reader = new FileReader();
+            reader.onload = function() {
+                try {
+                    var loaded = JSON.parse(reader.result);
+                    if (loaded && typeof loaded === "object") {
+                        if (document.getElementById("modeselect").value == "mod") {
+                            overwrite(loaded);
+                        }
+                        else if (document.getElementById("modeselect").value == "solo") {
+                            play(loaded);
+                        }
+                    }
+                }
+                catch (e) {
+                    alert("Failed to load file.");
+                }
+            };
+            reader.readAsText(event.target.files[0]);
+            document.getElementById("packselect").value = ""; //clears loaded file so it can be selected again
+        }
+
+        var questions = document.getElementById("questions");
+        var bonuses = document.getElementById("bonuses");
+        var qstep = -1; //selected question
+        var bstep = -1; //selected bonus
+        var opened = false;
+        function overwrite(pack) {
+            if (pack.version == "0.1") {
+                for (var i = 0; i < pack.questions.length; i++) {
+                    if (pack.questions[i].question == "") {
+                        pack.questions.splice(i, 1); //removes blank questions
+                        i--;
+                    }
+                }
+                clear();
+                document.getElementById("packtitle").textContent = pack.title;
+                document.getElementById("packauthor").textContent = "Credits: " + pack.author;
+                document.getElementById("packnote").textContent = "Note: " + pack.note;
+                for (i = 0; i < pack.questions.length; i++) {
+                    var current = document.createElement("div"); //current question
+                    current.style = "margin-bottom:3em;";
+                    questions.appendChild(current);
+                    var elem = document.createElement("div"); //number
+                    elem.className = "qheader";
+                    elem.textContent = "Toss-up " + (i + 1);
+                    current.appendChild(elem);
+                    if (pack.questions[i].preamble != "") { //ignores blank preamble fields
+                        elem = document.createElement("div"); //preamble
+                        elem.style = "margin-bottom:0.8em;";
+                        elem.textContent = ":: " + pack.questions[i].preamble;
+                        current.appendChild(elem);
+                    }
+                    elem = document.createElement("div"); //question
+                    elem.className = "qbody";
+                    var mark = pack.questions[i].question.split("(*)"); //split by early answer bonus marker
+                    if (mark.length == 1) {
+                        elem.textContent = pack.questions[i].question; //no early answer bonus
+                    }
+                    else {
+                        var part, b;
+                        for (b = 0; b < mark.length - 1; b++) {
+                            part = document.createElement("span"); //early bonus sections
+                            part.style = "font-weight:bold;"; //stylize
+                            part.textContent = mark[b] + "(*)";
+                            elem.appendChild(part);
+                        }
+                        part = document.createElement("span"); //no early bonus section
+                        part.textContent = mark[b];
+                        elem.appendChild(part);
+                    }
+                    current.appendChild(elem);
+                    elem = document.createElement("div"); //answer container
+                    elem.style = "line-height:2.0;";
+                    for (var j = 0; j < pack.questions[i].answer.length; j++) {
+                        if (pack.questions[i].answer[j] != "") { //ignores blank answer fields
+                            var answer = document.createElement("span"); //answer
+                            answer.className = "abody";
+                            mark = pack.questions[i].answer[j].split(/(\*\*([^*]*)\*\*)/g); //keep emphasis markers
+                            if (mark.length == 1) {
+                                answer.textContent = pack.questions[i].answer[j]; //no emphasis
+                            }
+                            else {
+                                var part, u;
+                                var comp = pack.questions[i].answer[j].match(/\*\*([^*]*)\*\*/g);
+                                var c = 0;
+                                for (u = 0; u < mark.length; u++) {
+                                    part = document.createElement("span"); //answer sections
+                                    if (mark[u] == comp[c]) {
+                                        part.style = "font-weight:bold; text-decoration:underline;"; //emphasize
+                                        c++; //next match
+                                        part.textContent = mark[u].substring(2, mark[u].length - 2); //remove asterisks
+                                        u++; //do not repeat word
+                                    }
+                                    else {
+                                        part.textContent = mark[u]; //no emphasis
+                                    }
+                                    answer.appendChild(part);
+                                }
+                            }
+                            elem.appendChild(answer);
+                        }
+                    }
+                    current.appendChild(elem);
+                }
+                for (var i = 0; i < pack.bonuses.length; i++) {
+                    var current = document.createElement("div"); //current bonus
+                    current.style = "margin-bottom:3em;";
+                    bonuses.appendChild(current);
+                    var elem = document.createElement("div"); //number
+                    elem.className = "qheader";
+                    elem.textContent = "Bonus " + (i + 1);
+                    current.appendChild(elem);
+                    if (pack.bonuses[i].preamble != "") { //ignores blank preamble fields
+                        elem = document.createElement("div"); //preamble
+                        elem.style = "margin-bottom:0.8em;";
+                        elem.textContent = ":: " + pack.bonuses[i].preamble;
+                        current.appendChild(elem);
+                    }
+                    for (var b = 0; b < 3; b++) {
+                        elem = document.createElement("div"); //question
+                        elem.className = "qbody";
+                        elem.textContent = pack.bonuses[i].questions[b];
+                        current.appendChild(elem);
+                        elem = document.createElement("div"); //answer container
+                        elem.style = "margin-bottom:1em; line-height:2.0;";
+                        for (var j = 0; j < pack.bonuses[i].answers[b].length; j++) {
+                            if (pack.bonuses[i].answers[b][j] != "") { //ignores blank answer fields
+                                var answer = document.createElement("span"); //answer
+                                answer.className = "abody";
+                                mark = pack.bonuses[i].answers[b][j].split(/(\*\*([^*]*)\*\*)/g); //keep emphasis markers
+                                if (mark.length == 1) {
+                                    answer.textContent = pack.bonuses[i].answers[b][j]; //no emphasis
+                                }
+                                else {
+                                    var part, u;
+                                    var comp = pack.bonuses[i].answers[b][j].match(/\*\*([^*]*)\*\*/g);
+                                    var c = 0;
+                                    for (u = 0; u < mark.length; u++) {
+                                        part = document.createElement("span"); //answer sections
+                                        if (mark[u] == comp[c]) {
+                                            part.style = "font-weight:bold; text-decoration:underline;"; //emphasize
+                                            c++; //next match
+                                            part.textContent = mark[u].substring(2, mark[u].length - 2); //remove asterisks
+                                            u++; //do not repeat word
+                                        }
+                                        else {
+                                            part.textContent = mark[u]; //no emphasis
+                                        }
+                                        answer.appendChild(part);
+                                    }
+                                }
+                                elem.appendChild(answer);
+                            }
+                        }
+                        current.appendChild(elem);
+                    }
+                }
+                qstep = -1;
+                bstep = -1;
+                opened = true; //a pack is opened
+            }
+            else {
+                alert("Unknown version number.");
+            }
+        }
+
+        function clear() { //removes loaded content
+            while (questions.firstChild) {
+                questions.removeChild(questions.firstChild); //clears questions
+            }
+            while (bonuses.firstChild) {
+                bonuses.removeChild(bonuses.firstChild); //clears bonuses
+            }
+        }
+
+        function play(pack) {
+            clear();
+            var notice = document.createElement("div");
+            notice.textContent = "Solo mode has not been implemented.";
+            questions.appendChild(notice);
+        }
+
+        function help() {
+            alert("Quiz Reader 0.1\n\n- Choose a mode and then select a pack file.\n\nModerator:\n- Navigate toss-ups with T (next) and R (previous).\n- Navigate bonuses with B (next) and V (previous).\nSolo:\n- NOT IMPLEMENTED\n\n\nTested with browsers: Chrome 70, Edge 42, Safari 12, Firefox 64.");
+        }
+    }());
+    </script>
+</body>
+
+</html>
