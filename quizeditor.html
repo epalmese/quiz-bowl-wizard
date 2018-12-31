@@ -15,23 +15,13 @@
         <h1>QuizEditor</h1> <span id="version">0.1</span>
         <button id="buttonR" class="control">Home</button>
         <button id="buttonH" class="control">Help (h)</button>
-        <button id="buttonS" class="control">Save (s)</button><br><br>
-        <table>
-            <tbody>
-                <tr>
-                    <td style="min-width:4.5em;"><label for="packtitle">Pack title:</label></td>
-                    <td><input type="text" id="packtitle"></td>
-                    <td><label for="packselect">Load:</label></td>
-                    <td><input type="file" id="packselect" accept=".quiz"></td>
-                </tr>
-                <tr>
-                    <td><label for="packauthor">Credit(s):</label></td>
-                    <td><input type="text" id="packauthor"></td>
-                    <td><label for="packnote">Note(s):</label></td>
-                    <td style="width:60%;"><input type="text" id="packnote" style="width:98%;"></td>
-                </tr>
-            </tbody>
-        </table><br><br>
+        <button id="buttonS" class="control">Save (s)</button>
+        <div class="toptable metatable">
+            <div class="metacell"><label for="packtitle">Pack title:</label><input type="text" id="packtitle"></div>
+            <div class="metacell"><label for="packselect">Load:</label><input type="file" id="packselect" accept=".quiz"></div>
+            <div class="metacell"><label for="packauthor">Credit(s):</label><input type="text" id="packauthor"></div>
+            <div class="metacell"><label for="packnote">Note(s):</label><input type="text" id="packnote"></div>
+        </div>
         <div id="questions"></div>
         <button id="buttonQ">Add Toss-up (t)</button><br><br>
         <div id="bonuses"></div>
