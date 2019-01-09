@@ -36,7 +36,7 @@
                 if (e.keyCode == 72) { //h
                     help(); //open help
                 }
-                if (opened == true) {
+                if (state == 1) {
                     if (e.keyCode == 84 && qstep < questions.children.length - 1) { //t
                         qstep++;
                         questions.children[qstep].scrollIntoView({block: "start", behavior: "smooth"});
@@ -54,6 +54,16 @@
                         bonuses.children[bstep].scrollIntoView({block: "start", behavior: "smooth"});
                     }
                 }
+                if (state == 2 || state == 3) {
+                    if (e.keyCode == 78) { //n
+                        next();
+                    }
+                }
+                if (state == 3) {
+                    if (e.keyCode == 32) { //space
+                        buzz();
+                    }
+                }
             }
         }, false);
         //button functions
@@ -67,12 +77,7 @@
                 try {
                     var loaded = JSON.parse(reader.result);
                     if (loaded && typeof loaded === "object") {
-                        if (document.getElementById("modeselect").value == "mod") {
-                            overwrite(loaded);
-                        }
-                        else if (document.getElementById("modeselect").value == "solo") {
-                            play(loaded);
-                        }
+                        init(loaded, document.getElementById("modeselect").value);
                     }
                 }
                 catch (e) {
@@ -87,65 +92,153 @@
         var bonuses = document.getElementById("bonuses");
         var qstep = -1; //selected question
         var bstep = -1; //selected bonus
-        var opened = false;
-        function overwrite(pack) {
+        var state = 0; //no packs are ready by default. (0 = blank, 1 = moderating, 2 = ready, 3 = reading, 4 = answering)
+        function init(pack, m) { //performs generic steps
             if (pack.version == "0.1") {
+                qstep = -1;
+                bstep = -1;
+                clearInterval(script);
+                clearInterval(timer);
+                clear();
                 for (var i = 0; i < pack.questions.length; i++) {
                     if (pack.questions[i].question == "") {
-                        pack.questions.splice(i, 1); //removes blank questions
+                        pack.questions.splice(i, 1); //removes blank questions from a pack
                         i--;
                     }
                 }
-                clear();
                 document.getElementById("packtitle").textContent = pack.title;
-                document.getElementById("packauthor").textContent = "Credits: " + pack.author;
+                if (pack.author != "") {
+                    document.getElementById("packauthor").textContent = "Credits: " + pack.author;
+                }
+                else {
+                    document.getElementById("packauthor").textContent = "";
+                }
+                if (m == "mod") {
+                    overwrite(pack);
+                }
+                else if (m == "solo") {
+                    play(pack);
+                }
+            }
+            else {
+                alert("Unknown version number.");
+            }
+        }
+        
+        function clear() {
+            while (questions.firstChild) {
+                questions.removeChild(questions.firstChild); //clears questions
+            }
+            while (bonuses.firstChild) {
+                bonuses.removeChild(bonuses.firstChild); //clears bonuses
+            }
+        }
+
+        function overwrite(pack) {
+            if (pack.note != "") {
                 document.getElementById("packnote").textContent = "Note: " + pack.note;
-                for (i = 0; i < pack.questions.length; i++) {
-                    var current = document.createElement("div"); //current question
-                    current.style = "margin-bottom:3em;";
-                    questions.appendChild(current);
-                    var elem = document.createElement("div"); //number
-                    elem.className = "qheader";
-                    elem.textContent = "Toss-up " + (i + 1);
+            }
+            else {
+                document.getElementById("packnote").textContent = "";
+            }
+            for (i = 0; i < pack.questions.length; i++) {
+                var current = document.createElement("div"); //current question
+                current.style = "margin-bottom:3em;";
+                questions.appendChild(current);
+                var elem = document.createElement("div"); //number
+                elem.className = "qheader";
+                elem.textContent = "Toss-up " + (i + 1);
+                current.appendChild(elem);
+                if (pack.questions[i].preamble != "") { //ignores blank preamble fields
+                    elem = document.createElement("div"); //preamble
+                    elem.style = "margin-bottom:0.8em;";
+                    elem.textContent = ":: " + pack.questions[i].preamble;
                     current.appendChild(elem);
-                    if (pack.questions[i].preamble != "") { //ignores blank preamble fields
-                        elem = document.createElement("div"); //preamble
-                        elem.style = "margin-bottom:0.8em;";
-                        elem.textContent = ":: " + pack.questions[i].preamble;
-                        current.appendChild(elem);
-                    }
-                    elem = document.createElement("div"); //question
-                    elem.className = "qbody";
-                    var mark = pack.questions[i].question.split("(*)"); //split by early answer bonus marker
-                    if (mark.length == 1) {
-                        elem.textContent = pack.questions[i].question; //no early answer bonus
-                    }
-                    else {
-                        var part, b;
-                        for (b = 0; b < mark.length - 1; b++) {
-                            part = document.createElement("span"); //early bonus sections
-                            part.style = "font-weight:bold;"; //stylize
-                            part.textContent = mark[b] + "(*)";
-                            elem.appendChild(part);
-                        }
-                        part = document.createElement("span"); //plain section
-                        part.textContent = mark[b];
+                }
+                elem = document.createElement("div"); //question
+                elem.className = "qbody";
+                var mark = pack.questions[i].question.split("(*)"); //split by early answer bonus marker
+                if (mark.length == 1) {
+                    elem.textContent = pack.questions[i].question; //no early answer bonus
+                }
+                else {
+                    var part, b;
+                    for (b = 0; b < mark.length - 1; b++) {
+                        part = document.createElement("span"); //early bonus sections
+                        part.style = "font-weight:bold;"; //stylize
+                        part.textContent = mark[b] + "(*)";
                         elem.appendChild(part);
                     }
+                    part = document.createElement("span"); //plain section
+                    part.textContent = mark[b];
+                    elem.appendChild(part);
+                }
+                current.appendChild(elem);
+                elem = document.createElement("div"); //answer container
+                elem.style = "line-height:2.0;";
+                for (var j = 0; j < pack.questions[i].answer.length; j++) {
+                    if (pack.questions[i].answer[j] != "") { //ignores blank answer fields
+                        var answer = document.createElement("span"); //answer
+                        answer.className = "abody";
+                        mark = pack.questions[i].answer[j].split(/(\*\*([^*]*)\*\*)/g); //keep emphasis markers
+                        if (mark.length == 1) {
+                            answer.textContent = pack.questions[i].answer[j]; //no emphasis
+                        }
+                        else {
+                            var part, u;
+                            var comp = pack.questions[i].answer[j].match(/\*\*([^*]*)\*\*/g);
+                            var c = 0;
+                            for (u = 0; u < mark.length; u++) {
+                                part = document.createElement("span"); //answer sections
+                                if (mark[u] == comp[c]) {
+                                    part.style = "font-weight:bold; text-decoration:underline;"; //emphasize
+                                    c++; //next match
+                                    part.textContent = mark[u].substring(2, mark[u].length - 2); //remove asterisks
+                                    u++; //do not repeat word
+                                }
+                                else {
+                                    part.textContent = mark[u]; //no emphasis
+                                }
+                                answer.appendChild(part);
+                            }
+                        }
+                        elem.appendChild(answer);
+                    }
+                }
+                current.appendChild(elem);
+            }
+            for (var i = 0; i < pack.bonuses.length; i++) {
+                var current = document.createElement("div"); //current bonus
+                current.style = "margin-bottom:3em;";
+                bonuses.appendChild(current);
+                var elem = document.createElement("div"); //number
+                elem.className = "qheader";
+                elem.textContent = "Bonus " + (i + 1);
+                current.appendChild(elem);
+                if (pack.bonuses[i].preamble != "") { //ignores blank preamble fields
+                    elem = document.createElement("div"); //preamble
+                    elem.style = "margin-bottom:0.8em;";
+                    elem.textContent = ":: " + pack.bonuses[i].preamble;
+                    current.appendChild(elem);
+                }
+                for (var b = 0; b < 3; b++) {
+                    elem = document.createElement("div"); //question
+                    elem.className = "qbody";
+                    elem.textContent = pack.bonuses[i].questions[b];
                     current.appendChild(elem);
                     elem = document.createElement("div"); //answer container
-                    elem.style = "line-height:2.0;";
-                    for (var j = 0; j < pack.questions[i].answer.length; j++) {
-                        if (pack.questions[i].answer[j] != "") { //ignores blank answer fields
+                    elem.style = "margin-bottom:1em; line-height:2.0;";
+                    for (var j = 0; j < pack.bonuses[i].answers[b].length; j++) {
+                        if (pack.bonuses[i].answers[b][j] != "") { //ignores blank answer fields
                             var answer = document.createElement("span"); //answer
                             answer.className = "abody";
-                            mark = pack.questions[i].answer[j].split(/(\*\*([^*]*)\*\*)/g); //keep emphasis markers
+                            var mark = pack.bonuses[i].answers[b][j].split(/(\*\*([^*]*)\*\*)/g); //keep emphasis markers
                             if (mark.length == 1) {
-                                answer.textContent = pack.questions[i].answer[j]; //no emphasis
+                                answer.textContent = pack.bonuses[i].answers[b][j]; //no emphasis
                             }
                             else {
                                 var part, u;
-                                var comp = pack.questions[i].answer[j].match(/\*\*([^*]*)\*\*/g);
+                                var comp = pack.bonuses[i].answers[b][j].match(/\*\*([^*]*)\*\*/g);
                                 var c = 0;
                                 for (u = 0; u < mark.length; u++) {
                                     part = document.createElement("span"); //answer sections
@@ -166,86 +259,140 @@
                     }
                     current.appendChild(elem);
                 }
-                for (var i = 0; i < pack.bonuses.length; i++) {
-                    var current = document.createElement("div"); //current bonus
-                    current.style = "margin-bottom:3em;";
-                    bonuses.appendChild(current);
-                    var elem = document.createElement("div"); //number
-                    elem.className = "qheader";
-                    elem.textContent = "Bonus " + (i + 1);
-                    current.appendChild(elem);
-                    if (pack.bonuses[i].preamble != "") { //ignores blank preamble fields
-                        elem = document.createElement("div"); //preamble
-                        elem.style = "margin-bottom:0.8em;";
-                        elem.textContent = ":: " + pack.bonuses[i].preamble;
-                        current.appendChild(elem);
+            }
+            state = 1; //a pack is ready for moderation
+        }
+
+        var stored = {}; //pack stored in memory for play
+        var score = 0; //points earned in pack
+        function play(pack) {
+            score = 0;
+            document.getElementById("packnote").textContent = "Score: " + score + " / " + pack.questions.length;
+            questions.appendChild(document.createTextNode("Ready. Press \"n\" to start reading."));
+            stored = pack;
+            state = 2; //a pack is ready for play
+        }
+        
+        var script;
+        function next() {
+            clearInterval(script); //pause reading
+            clear();
+            qstep++;
+            if (qstep < stored.questions.length) {
+                questions.appendChild(document.createElement("div")); //current question
+                var words = stored.questions[qstep].question.split(" ");
+                state = 3;
+                var i = 0;
+                script = setInterval(function() {
+                    questions.children[0].appendChild(document.createTextNode(words[i] + " "));
+                    if (i > words.length) {
+                        buzz(); //automatically buzz when the question is fully read
                     }
-                    for (var b = 0; b < 3; b++) {
-                        elem = document.createElement("div"); //question
-                        elem.className = "qbody";
-                        elem.textContent = pack.bonuses[i].questions[b];
-                        current.appendChild(elem);
-                        elem = document.createElement("div"); //answer container
-                        elem.style = "margin-bottom:1em; line-height:2.0;";
-                        for (var j = 0; j < pack.bonuses[i].answers[b].length; j++) {
-                            if (pack.bonuses[i].answers[b][j] != "") { //ignores blank answer fields
-                                var answer = document.createElement("span"); //answer
-                                answer.className = "abody";
-                                mark = pack.bonuses[i].answers[b][j].split(/(\*\*([^*]*)\*\*)/g); //keep emphasis markers
-                                if (mark.length == 1) {
-                                    answer.textContent = pack.bonuses[i].answers[b][j]; //no emphasis
-                                }
-                                else {
-                                    var part, u;
-                                    var comp = pack.bonuses[i].answers[b][j].match(/\*\*([^*]*)\*\*/g);
-                                    var c = 0;
-                                    for (u = 0; u < mark.length; u++) {
-                                        part = document.createElement("span"); //answer sections
-                                        if (mark[u] == comp[c]) {
-                                            part.style = "font-weight:bold; text-decoration:underline;"; //emphasize
-                                            c++; //next match
-                                            part.textContent = mark[u].substring(2, mark[u].length - 2); //remove asterisks
-                                            u++; //do not repeat word
-                                        }
-                                        else {
-                                            part.textContent = mark[u]; //no emphasis
-                                        }
-                                        answer.appendChild(part);
-                                    }
-                                }
-                                elem.appendChild(answer);
-                            }
-                        }
-                        current.appendChild(elem);
-                    }
-                }
-                qstep = -1;
-                bstep = -1;
-                opened = true; //a pack is opened
+                    i++;
+                }, 150);
             }
             else {
-                alert("Unknown version number.");
+                bonuses.appendChild(document.createTextNode("The pack is over, you may select a new one."));
             }
         }
-
-        function clear() { //removes loaded content
-            while (questions.firstChild) {
-                questions.removeChild(questions.firstChild); //clears questions
+        
+        var timer;
+        function buzz() {
+            clearInterval(script); //pause reading
+            state = 4;
+            var guessing = document.createElement("input");
+            guessing.id = "guessing";
+            bonuses.appendChild(guessing);
+            guessing.focus();
+            function send() {
+                guessing.removeEventListener("change", send, false);
+                clearInterval(timer);
+                var interrupt = document.createElement("span");
+                if (checkanswer(guessing.value)) {
+                    interrupt.style.color = "rgb(0, 255, 0)"; //green for correct
+                    score += 1;
+                    document.getElementById("packnote").textContent = "Score: " + score + " / " + stored.questions.length;
+                }
+                else {
+                    interrupt.style.color = "rgb(255, 0, 0)"; //red for incorrect
+                }
+                interrupt.textContent = "[" + guessing.value + "] ";
+                questions.children[0].appendChild(interrupt);
+                document.getElementById("guessing").remove();
+                var elem = document.createElement("div"); //answer container
+                elem.style = "line-height:2.0;";
+                for (var j = 0; j < stored.questions[qstep].answer.length; j++) {
+                    if (stored.questions[qstep].answer[j] != "") { //ignores blank answer fields
+                        var answer = document.createElement("span"); //answer
+                        answer.className = "abody";
+                        var mark = stored.questions[qstep].answer[j].split(/(\*\*([^*]*)\*\*)/g); //keep emphasis markers
+                        if (mark.length == 1) {
+                            answer.textContent = stored.questions[qstep].answer[j]; //no emphasis
+                        }
+                        else {
+                            var part, u;
+                            var comp = stored.questions[qstep].answer[j].match(/\*\*([^*]*)\*\*/g);
+                            var c = 0;
+                            for (u = 0; u < mark.length; u++) {
+                                part = document.createElement("span"); //answer sections
+                                if (mark[u] == comp[c]) {
+                                    part.style = "font-weight:bold; text-decoration:underline;"; //emphasize
+                                    c++; //next match
+                                    part.textContent = mark[u].substring(2, mark[u].length - 2); //remove asterisks
+                                    u++; //do not repeat word
+                                }
+                                else {
+                                    part.textContent = mark[u]; //no emphasis
+                                }
+                                answer.appendChild(part);
+                            }
+                        }
+                        elem.appendChild(answer);
+                    }
+                }
+                questions.children[0].appendChild(elem);
+                bonuses.appendChild(document.createTextNode("Press \"n\" to continue."));
+                state = 2;
             }
-            while (bonuses.firstChild) {
-                bonuses.removeChild(bonuses.firstChild); //clears bonuses
-            }
+            guessing.addEventListener("change", send, false);
+            var time = 10.0;
+            var counter = document.createElement("div");
+            bonuses.appendChild(counter);
+            timer = setInterval(function() {
+                counter.textContent = time.toFixed(1) + "s";
+                if (time > 0) {
+                    time -= 0.1;
+                }
+                else {
+                    counter.textContent = "0.0s";
+                    clearInterval(timer);
+                    send();
+                }
+            }, 100);
         }
-
-        function play(pack) {
-            clear();
-            var notice = document.createElement("div");
-            notice.textContent = "Solo mode has not been implemented.";
-            questions.appendChild(notice);
+        
+        function checkanswer(given) {
+            for (var i = 0; i < stored.questions[qstep].answer.length; i++) {
+                if (stored.questions[qstep].answer[i].split(/(\*\*([^*]*)\*\*)/g).length == 1) { //no markers for necessary terms
+                    if (given.toUpperCase().indexOf(stored.questions[qstep].answer[i].toUpperCase()) >= 0) {
+                        return true; //given answer contains correct answer
+                    }
+                }
+                else {
+                    var answers = stored.questions[qstep].answer[i].match(/\*\*([^*]*)\*\*/g);
+                    for (var j = 0; j < answers.length; j++) {
+                        answers[j] = answers[j].substring(2, answers[j].length - 2);
+                        if (given.toUpperCase().indexOf(answers[j].toUpperCase()) >= 0) {
+                            return true; //given answer contains correct answer (checks against any necessary term in each answer field, not a combination)
+                        }
+                    }
+                }
+            }
+            return false; //given answer is incorrect
         }
 
         function help() {
-            alert("Quiz Reader 0.1\n\n- Choose a mode and then select a pack file.\n\nModerator:\n- Navigate toss-ups with T (next) and R (previous).\n- Navigate bonuses with B (next) and V (previous).\nSolo:\n- NOT IMPLEMENTED\n\n\nTested with browsers: Chrome 70, Edge 42, Safari 12, Firefox 64.");
+            alert("Quiz Reader 0.1\n\n- Choose a mode and then select a pack file.\n\nModerator:\n- Navigate toss-ups with T (next) and R (previous).\n- Navigate bonuses with B (next) and V (previous).\nSolo:\n- Get the next toss-up with N.\n- Buzz with SPACE. Submit answers with ENTER.\n\n\nTested with browsers: Chrome 70, Edge 42, Safari 12, Firefox 64.");
         }
     }());
     </script>
