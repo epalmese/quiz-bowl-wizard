@@ -284,11 +284,13 @@
                 state = 3;
                 var i = 0;
                 script = setInterval(function() {
-                    questions.children[0].appendChild(document.createTextNode(words[i] + " "));
-                    if (i > words.length) {
+                    if (i < words.length) {
+                        questions.children[0].appendChild(document.createTextNode(words[i] + " "));
+                        i++;
+                    }
+                    else {
                         buzz(); //automatically buzz when the question is fully read
                     }
-                    i++;
                 }, 150);
             }
             else {
@@ -320,7 +322,7 @@
                 questions.children[0].appendChild(interrupt);
                 document.getElementById("guessing").remove();
                 var elem = document.createElement("div"); //answer container
-                elem.style = "line-height:2.0;";
+                elem.style = "line-height:2.0; margin-top:1em;";
                 for (var j = 0; j < stored.questions[qstep].answer.length; j++) {
                     if (stored.questions[qstep].answer[j] != "") { //ignores blank answer fields
                         var answer = document.createElement("span"); //answer
